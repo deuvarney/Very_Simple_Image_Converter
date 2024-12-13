@@ -1,7 +1,6 @@
 "use client"
-import { Layout, Button, Upload, message, UploadProps, GetProp, Image as AntdImage, List, Typography } from 'antd';
+import { Layout, Button, Upload, message, UploadProps, GetProp, Image as AntdImage, Divider } from 'antd';
 import { Space, Table, Row, Col } from 'antd';
-import type { TableProps } from 'antd';
 
 const { Dragger } = Upload;
 const { Header, Footer, Content } = Layout;
@@ -49,6 +48,14 @@ interface DataType {
   jpeg?: string;
 }
 
+interface RawDataType {
+  key?: string;
+  'image/webp'?: string;
+  'image/jpeg'?: string;
+  'image/png'?: string;
+  name?: string
+}
+
 function dataURLToBlob(dataURL: string) {
   const parts = dataURL.split(',');
   const mimeMatch = parts[0].match(/:(.*?);/);
@@ -92,24 +99,24 @@ function LayoutComponent(props: { children: React.ReactNode }) {
   );
 }
 
-function TableComponent(props: { imageName: string, data: DataType[] }) {
+function TableComponent(props: { data: RawDataType[], deleteImageGroup: (name: string) => void }) {
 
 
-  const downloadImage = (format = 'webp', value = '') => {
+  const downloadImage = (format = 'webp', imageName: string, value = '') => {
     const link = document.createElement('a');
-    link.download = `${props.imageName}.${format}`;
+    link.download = `${imageName}.${format}`;
     link.href = value;
     link.click();
   };
 
 
-  async function createZipFile(imageDataURLs: string[]): Promise<Blob> {
+  async function createZipFile(imageDataURLs: string[], imageName: string): Promise<Blob> {
     const zip = new JSZip();
 
     for (const dataURL of imageDataURLs) {
       const blob = dataURLToBlob(dataURL);
       const format = blob.type.split('/')[1]
-      const filename = `${props.imageName}.${format}`;
+      const filename = `${imageName}.${format}`;
       zip.file(filename, blob);
     }
 
@@ -117,20 +124,22 @@ function TableComponent(props: { imageName: string, data: DataType[] }) {
     return zipBlob;
   }
 
-  function downloadZipFile(zipBlob: Blob) {
+  function downloadZipFile(zipBlob: Blob, imageName: string) {
     const url = URL.createObjectURL(zipBlob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `${props.imageName}.zip`);
+    link.setAttribute('download', `${imageName}.zip`);
     // document.body.appendChild(link); // TODO: Test if this is needed
     link.click();
     // document.body.removeChild(link);  // TODO: Test if this is needed
     URL.revokeObjectURL(url);
   }
 
-  const downloadAllImages = async () => {
-    const zipBlob = await createZipFile(Object.values(props.data[0]));
-    downloadZipFile(zipBlob);
+  const downloadAllImages = async (name: string) => {
+    const imageGroup = props.data.find((obj) => obj.name === name);
+    const {name: namez = '', ...rest} = imageGroup || {};
+    const zipBlob = await createZipFile(Object.values(rest), name);
+    downloadZipFile(zipBlob, name);
   }
 
   function RenderImageTableCell(props: { imageUrl: string }) {
@@ -155,13 +164,13 @@ function TableComponent(props: { imageName: string, data: DataType[] }) {
       title: 'Image Name',
       dataIndex: 'name',
       key: 'name',
-      render: (text) => props.imageName,
+      render: (_text, record) => record.name,
     },
     {
       title: 'WEBP',
       dataIndex: 'webp',
       key: 'webp',
-      render: (imageUrl, record) => {
+      render: (imageUrl, _record) => {
         return (
           < RenderImageTableCell imageUrl={imageUrl} />
         );
@@ -171,7 +180,7 @@ function TableComponent(props: { imageName: string, data: DataType[] }) {
       title: 'PNG',
       dataIndex: 'png',
       key: 'png',
-      render: (imageUrl, record) => {
+      render: (imageUrl, _record) => {
         return (
           < RenderImageTableCell imageUrl={imageUrl} />
         );
@@ -181,7 +190,7 @@ function TableComponent(props: { imageName: string, data: DataType[] }) {
       title: 'JPEG',
       dataIndex: 'jpeg',
       key: 'jpeg',
-      render: (imageUrl, record) => {
+      render: (imageUrl, _record) => {
         return (
           < RenderImageTableCell imageUrl={imageUrl} />
         );
@@ -192,16 +201,17 @@ function TableComponent(props: { imageName: string, data: DataType[] }) {
       key: 'action',
       render: (_, record) => (
         <Space size="middle">
-          <a onClick={() => downloadAllImages()}>Download All Images</a>
-          <a>Delete</a>
+          <a onClick={() => downloadAllImages(record.name)}>Download All Images</a>
+          <a onClick={() => props.deleteImageGroup(record.name)}>Delete</a>
         </Space>
       ),
     },
   ];
 
+
   const data = props.data.map((dataObj) => ({
     // TODO: Clean this up!
-    name: props.imageName,
+    name: dataObj.name,
     webp: dataObj['image/webp'],
     png: dataObj['image/png'],
     jpeg: dataObj['image/jpeg'],
@@ -209,21 +219,27 @@ function TableComponent(props: { imageName: string, data: DataType[] }) {
 
 
   return (
-    <Table columns={columns} dataSource={data} style={{ overflow: 'scroll' }}/>
+    <Table columns={columns} dataSource={data} style={{ overflow: 'scroll' }} />
   )
 }
 
 
+interface InputImageData {
+  name: string;
+  image: string;
+}
+
 function ContentComponent() {
 
-  const [imageUrl, setImageUrl] = useState('');
-  const [imageName, setImageName] = useState('');
-  const [imageOutputs, setImageOutputs] = useState<DataType>({});
+  const [imageInputs, setImageInputs] = useState<InputImageData[]>([]);
+  const [imageOutputs, setImageOutputs] = useState<RawDataType[]>([]);
 
 
   const props: UploadProps = {
     name: 'file',
     action: '', // Empty string to prevent uploading to a server
+    accept: SUPPORTED_OUTPUT_FORMATS.join(', '),
+    multiple: true,
 
     beforeUpload,
     async onChange(info) {
@@ -233,8 +249,8 @@ function ContentComponent() {
       if (info.file.status === 'done') {
         message.success(`${info.file.name} file uploaded successfully`);
         const imgDataUrl = await getBase64(info.file.originFileObj as FileType);
-        setImageUrl(imgDataUrl);
-        setImageName(info.file.name.split('.')[0]);
+        const name = info.file.name.split('.')[0];
+        setImageInputs((oldImageInputs) => [...oldImageInputs, { name, image: imgDataUrl }]);
       } else if (info.file.status === 'error') {
         message.error(`${info.file.name} file upload failed.`);
       }
@@ -242,20 +258,28 @@ function ContentComponent() {
     showUploadList: false,
   };
 
-  function onPreviewImageLoaded(evt: SyntheticEvent<HTMLImageElement>) {
+  function onPreviewImageLoaded(_evt: SyntheticEvent<HTMLImageElement>, imageData: InputImageData, index: number) {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     const img = new Image();
-    img.src = imageUrl;
+    img.src = imageData.image;
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
     ctx?.drawImage(img, 0, 0);
 
-    const vals = SUPPORTED_OUTPUT_FORMATS.reduce((acc, val) => {
+    const vals = { name: imageData.name }
+
+    SUPPORTED_OUTPUT_FORMATS.reduce((acc, val) => {
       acc[val] = canvas.toDataURL(val);
       return acc;
-    }, {} as Record<string, string>);
-    setImageOutputs(vals);
+    }, vals as Record<string, string>);
+
+    setImageOutputs((oldImageOutputs) => [...oldImageOutputs, vals]);
+  }
+
+  function deleteImageGroup(name: string) {
+    setImageOutputs((oldImageOutputs) => oldImageOutputs.filter((image) => image.name !== name));
+    setImageInputs((oldImageInputs) => oldImageInputs.filter((input) => input.name !== name));
   }
 
   return (
@@ -280,24 +304,33 @@ function ContentComponent() {
         </Col>
       </Row>
 
-      {imageUrl ? 
-       
-       <>
-        <div style={{ margin: '32px' }} />
-        <AntdImage 
-          style={{ maxWidth: '480px', maxHeight: '480px' }}
-          src={imageUrl}
-          onLoad={onPreviewImageLoaded}
-          alt="avatar" 
-          />
-        <div style={{ margin: '32px' }} />
-       </>: null}
-        
+      {imageInputs.length ?
+        <>
+          <div style={{ margin: '32px', backgroundColor: 'rgba(0, 0, 0, 0.1)'}}>
+            <Divider />
+            <AntdImage.PreviewGroup>
+              {imageInputs.map((imageData, index) => (
+                <AntdImage
+                  key={imageData.name}
+                  style={{ maxWidth: '120px', maxHeight: '120px', margin: '24px' , borderRadius: '8px' }}
+                  src={imageData.image}
+                  onLoad={(evt) => onPreviewImageLoaded(evt, imageData, index)}
+                  alt="avatar"
+                  preview={{
+                    src: imageData.image,
+                  }}
+                />
+              ))}
+
+            </AntdImage.PreviewGroup>
+          </div>
+        </> : null}
+
 
       {
-        !!Object.keys(imageOutputs).length && (
-          <>            
-            <TableComponent data={[imageOutputs]} imageName={imageName} />
+        !!imageOutputs.length && (
+          <>
+            <TableComponent data={imageOutputs} deleteImageGroup={deleteImageGroup} />
           </>
         )
       }
