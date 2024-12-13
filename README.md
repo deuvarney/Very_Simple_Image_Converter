@@ -1,3 +1,33 @@
+# Very Simple Image Converter
+
+A simple web application that converts image files to WebP, PNG, and JPG formats.
+
+## About
+
+This project is a basic image converter that takes an input image file and converts it to three different formats: WebP, PNG, and JPG. The application uses a simple and intuitive interface to allow users to upload their image files and download the converted images.
+
+## Features
+
+Convert image files to WebP, PNG, and JPG formats
+Simple and intuitive interface for uploading and downloading images
+Supports multiple image file formats for input
+Online Demo
+
+You can view the application online at: https://deuvarney.github.io/Very_Simple_Image_Converter
+
+## How it Works
+
+Upload an image file to the application
+Select the desired output formats (WebP, PNG, and/or JPG)
+Click the "Convert" button to start the conversion process
+Download the converted images in the selected formats
+Note
+
+This is a basic proof-of-concept application and may not work perfectly for all image files or formats. If you encounter any issues or have suggestions for improvement, please feel free to open an issue or submit a pull request.
+
+
+# Overview
+
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
 ## Getting Started
