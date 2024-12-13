@@ -72,13 +72,8 @@ const SUPPORTED_OUTPUT_FORMATS = ['image/webp', 'image/jpeg', 'image/png',];
 
 type FileType = Parameters<GetProp<UploadProps, 'beforeUpload'>>[0];
 
-const beforeUpload = (file: FileType) => {
-
-  const isSupportedImage = SUPPORTED_OUTPUT_FORMATS.includes(file.type);
-  if (!isSupportedImage) {
-    message.error('You can only upload JPG/PNG/WEBP file!');
-  }
-  return isSupportedImage;
+const beforeUpload = (_file: FileType) => {
+  return false; // Do not allow upload/POST requests
 };
 
 const getBase64 = (file: FileType): Promise<string> =>
@@ -137,7 +132,7 @@ function TableComponent(props: { data: RawDataType[], deleteImageGroup: (name: s
 
   const downloadAllImages = async (name: string) => {
     const imageGroup = props.data.find((obj) => obj.name === name);
-    const {name: namez = '', ...rest} = imageGroup || {};
+    const { name: unusedName = '', ...rest } = imageGroup || {};
     const zipBlob = await createZipFile(Object.values(rest), name);
     downloadZipFile(zipBlob, name);
   }
@@ -243,17 +238,15 @@ function ContentComponent() {
 
     beforeUpload,
     async onChange(info) {
-      if (info.file.status !== 'uploading') {
-        console.log(info.file, info.fileList);
+      const file = info.fileList.find((fileItem) => fileItem.uid === info.file.uid);
+      const isSupportedImage = !!file?.type && SUPPORTED_OUTPUT_FORMATS.includes(file.type);
+      if (!isSupportedImage) {
+        message.error('You can only upload JPG/PNG/WEBP file!: ' + file?.name);
+        return false;
       }
-      if (info.file.status === 'done') {
-        message.success(`${info.file.name} file uploaded successfully`);
-        const imgDataUrl = await getBase64(info.file.originFileObj as FileType);
-        const name = info.file.name.split('.')[0];
-        setImageInputs((oldImageInputs) => [...oldImageInputs, { name, image: imgDataUrl }]);
-      } else if (info.file.status === 'error') {
-        message.error(`${info.file.name} file upload failed.`);
-      }
+      const imgDataUrl = await getBase64(file.originFileObj as FileType);
+      const name = file.name.split('.')[0];
+      setImageInputs((oldImageInputs) => [...oldImageInputs, { name, image: imgDataUrl }]);
     },
     showUploadList: false,
   };
@@ -306,13 +299,13 @@ function ContentComponent() {
 
       {imageInputs.length ?
         <>
-          <div style={{ margin: '32px', backgroundColor: 'rgba(0, 0, 0, 0.1)'}}>
+          <div style={{ margin: '32px', backgroundColor: 'rgba(0, 0, 0, 0.1)' }}>
             <Divider />
             <AntdImage.PreviewGroup>
               {imageInputs.map((imageData, index) => (
                 <AntdImage
                   key={imageData.name}
-                  style={{ maxWidth: '120px', maxHeight: '120px', margin: '24px' , borderRadius: '8px' }}
+                  style={{ maxWidth: '120px', maxHeight: '120px', margin: '24px', borderRadius: '8px' }}
                   src={imageData.image}
                   onLoad={(evt) => onPreviewImageLoaded(evt, imageData, index)}
                   alt="avatar"
